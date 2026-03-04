@@ -1,6 +1,9 @@
 package org.example;
 
-import tools.jackson.core.type.TypeReference;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.RedisClient;
+import redis.clients.jedis.exceptions.JedisConnectionException;
+import redis.clients.jedis.params.SetParams;
 import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
@@ -8,15 +11,15 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.util.List;
 
 public class WeatherApi {
 
     private String zipCode;
-    private final String API_KEY = System.getenv("WEATHER_API_KEY");;
+    private final String API_KEY = System.getenv("WEATHER_API_KEY");
     private String api_url;
     private final HttpClient client;
     private final ObjectMapper objectMapper;
+    private final RedisClient jedis;
 
     public WeatherApi(String zipCode){
         this.zipCode = zipCode;
@@ -24,9 +27,12 @@ public class WeatherApi {
                 this.zipCode + "?key=" + API_KEY + "&include=days&elements=datetime,tempmax,tempmin,temp,conditions";
         this.client = HttpClient.newHttpClient();
         this.objectMapper = new ObjectMapper();
+        this.jedis = RedisClient.builder()
+                .hostAndPort("localhost", 6379)
+                .build();
     }
 
-    public HttpResponse<String> sendRequest() throws IOException, InterruptedException {
+    private HttpResponse<String> sendRequest() throws IOException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(api_url))
                 .GET()
@@ -35,14 +41,21 @@ public class WeatherApi {
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
-    public Weather fetchWeatherData() throws IOException, InterruptedException {
-        HttpResponse<String> response = sendRequest();
+    private Weather fetchWeatherData() throws IOException, InterruptedException {
+        String cacheKey = "weather:" + zipCode;
+        String cachedJson = jedis.get(cacheKey);
 
-        if(response.statusCode() != 200){
-            throw new AddressNotFoundException(zipCode + " address does not exist!");
+        if(cachedJson != null){
+            return objectMapper.readValue(cachedJson, Weather.class);
         }
 
-        return objectMapper.readValue(response.body(), new TypeReference<Weather>() {});
+        HttpResponse<String> response = sendRequest();
+        if (response.statusCode() != 200) {
+            throw new AddressNotFoundException("Address is not found");
+        }
+
+        jedis.set(cacheKey, response.body(), SetParams.setParams().ex(3600));
+        return objectMapper.readValue(response.body(), Weather.class);
     }
 
     public void displayWeather() throws IOException, InterruptedException {
