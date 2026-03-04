@@ -19,17 +19,19 @@ public class WeatherApi {
     private String api_url;
     private final HttpClient client;
     private final ObjectMapper objectMapper;
-    private final RedisClient jedis;
+    private static final RedisClient jedis = RedisClient.builder()
+            .hostAndPort("localhost", 6379)
+            .build();
 
     public WeatherApi(String zipCode){
         this.zipCode = zipCode;
+        if (this.API_KEY == null){
+            throw new IllegalStateException("API_KEY is not set");
+        }
         this.api_url = "https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/" +
                 this.zipCode + "?key=" + API_KEY + "&include=days&elements=datetime,tempmax,tempmin,temp,conditions";
         this.client = HttpClient.newHttpClient();
         this.objectMapper = new ObjectMapper();
-        this.jedis = RedisClient.builder()
-                .hostAndPort("localhost", 6379)
-                .build();
     }
 
     private HttpResponse<String> sendRequest() throws IOException, InterruptedException {
