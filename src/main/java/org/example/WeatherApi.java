@@ -1,6 +1,9 @@
 package org.example;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import redis.clients.jedis.RedisClient;
+import redis.clients.jedis.exceptions.JedisConnectionException;
 import redis.clients.jedis.params.SetParams;
 import tools.jackson.databind.ObjectMapper;
 
@@ -12,6 +15,7 @@ import java.net.http.HttpResponse;
 
 public class WeatherApi {
 
+    private static final Logger log = LoggerFactory.getLogger(WeatherApi.class);
     private final String zipCode;
     private final String api_url;
     private final HttpClient client;
@@ -46,8 +50,13 @@ public class WeatherApi {
 
     private Weather fetchWeatherData() throws IOException, InterruptedException {
         String cacheKey = "weather:" + zipCode;
-        String cachedJson = jedis.get(cacheKey);
+        String cachedJson = null;
 
+        try{
+            cachedJson = jedis.get(cacheKey);
+        }catch (JedisConnectionException e){
+            log.error("Redis connection failed during get");
+        }
         if(cachedJson != null){
             return objectMapper.readValue(cachedJson, Weather.class);
         }
@@ -57,7 +66,12 @@ public class WeatherApi {
             throw new AddressNotFoundException("Address is not found");
         }
 
-        jedis.set(cacheKey, response.body(), SetParams.setParams().ex(3600));
+        try{
+            jedis.set(cacheKey, response.body(), SetParams.setParams().ex(3600));
+        }catch (JedisConnectionException e){
+            log.error("Redis connection failed during set");
+        }
+
         return objectMapper.readValue(response.body(), Weather.class);
     }
 
