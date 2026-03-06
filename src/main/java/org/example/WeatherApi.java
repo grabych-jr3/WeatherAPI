@@ -1,8 +1,6 @@
 package org.example;
 
-import redis.clients.jedis.Jedis;
 import redis.clients.jedis.RedisClient;
-import redis.clients.jedis.exceptions.JedisConnectionException;
 import redis.clients.jedis.params.SetParams;
 import tools.jackson.databind.ObjectMapper;
 
@@ -14,20 +12,23 @@ import java.net.http.HttpResponse;
 
 public class WeatherApi {
 
-    private String zipCode;
-    private final String API_KEY = System.getenv("WEATHER_API_KEY");
-    private String api_url;
+    private final String zipCode;
+    private final String api_url;
     private final HttpClient client;
     private final ObjectMapper objectMapper;
+
+    private static final String API_KEY = System.getenv("WEATHER_API_KEY");
     private static final RedisClient jedis = RedisClient.builder()
             .hostAndPort("localhost", 6379)
             .build();
 
     public WeatherApi(String zipCode){
         this.zipCode = zipCode;
-        if (this.API_KEY == null){
+
+        if (API_KEY == null){
             throw new IllegalStateException("API_KEY is not set");
         }
+
         this.api_url = "https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/" +
                 this.zipCode + "?key=" + API_KEY + "&include=days&elements=datetime,tempmax,tempmin,temp,conditions";
         this.client = HttpClient.newHttpClient();
