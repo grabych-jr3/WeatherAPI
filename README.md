@@ -24,18 +24,29 @@ Don't forget to set the following environment variable: WEATHER_API_KEY=<your_ap
 # :closed_lock_with_key: How it works?
 ```java
 String cacheKey = "weather:" + zipCode;
-String cachedJson = jedis.get(cacheKey);
+String cachedJson = null;
+
+try{
+    cachedJson = jedis.get(cacheKey);
+}catch (JedisConnectionException e){
+    log.error("Redis connection failed during get");
+}
 
 if(cachedJson != null){
-  return objectMapper.readValue(cachedJson, Weather.class);
+    return objectMapper.readValue(cachedJson, Weather.class);
 }
 
 HttpResponse<String> response = sendRequest();
 if (response.statusCode() != 200) {
-  throw new AddressNotFoundException("Address is not found");
+        throw new AddressNotFoundException("Address is not found");
 }
 
-jedis.set(cacheKey, response.body(), SetParams.setParams().ex(3600));
+try{
+    jedis.set(cacheKey, response.body(), SetParams.setParams().ex(3600));
+}catch (JedisConnectionException e){
+    log.error("Redis connection failed during set");
+}
+
 return objectMapper.readValue(response.body(), Weather.class);
 ```
 Redis stores data in key-value format. The application first checks whether we have cached weather by the key `weather:{zipCode}`.
